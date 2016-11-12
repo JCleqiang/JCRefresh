@@ -1,4 +1,4 @@
 # JCRefresh
 An easy Refresh for iOS.
 
-![image](https://github.com/JCLeQiang/JCRefresh/snap.gif)
+![image](https://github.com/JCleqiang/JCRefresh/blob/master/snap.gif)
