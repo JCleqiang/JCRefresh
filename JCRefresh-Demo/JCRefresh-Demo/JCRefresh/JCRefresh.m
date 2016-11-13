@@ -13,9 +13,9 @@
 #define JC_THEME_COLOE JCColor(59.0, 84.0, 106.0)
 
 static CGFloat const kRefreshWidthAndHeight = 45.f;
-static CGFloat const kLineWidth = 5.f;
+static CGFloat const kLineWidth = 5.f; // j上半部分中 竖线的宽度
 static CGFloat const kLineHeight = 16.f; // j上半部分中 竖线的高度
-static CGFloat const kInnerRadius = 8.f; // j下半部分中 圆的半径
+static CGFloat const kInnerRadius = 8.f; // j下半部分中 内圆的半径
 static CGFloat const kRefreshingStayHeight = 70.f;
 static CGFloat const kRefreshControlHideDuration = 0.5; // 控件从刷新状态重置为默认状态的时间
 
@@ -28,10 +28,10 @@ static CGFloat const kRefreshControlHideDuration = 0.5; // 控件从刷新状态
 @property (nonatomic, strong) UIScrollView *superView;
 /** 背景灰色的layer，显示 `J` */
 @property (nonatomic, strong) CAShapeLayer *bgGrayLayer;
-/** 底部layer,显示 `J` 的下半部分 */
-@property (nonatomic, strong) CAShapeLayer *bottomLayer;
 /** 顶部layer，显示 `J` 的上半部分 */
 @property (nonatomic, strong) CAShapeLayer *topLayer;
+/** 底部layer,显示 `J` 的下半部分, 其实就是四分之一圆 */
+@property (nonatomic, strong) CAShapeLayer *bottomLayer;
 /** <#Description#> */
 @property (nonatomic, assign) CGFloat contentOffsetScale;
 /** 控件刷新状态 */
@@ -40,6 +40,7 @@ static CGFloat const kRefreshControlHideDuration = 0.5; // 控件从刷新状态
 
 @implementation JCRefresh
 
+#pragma mark - 初始化
 + (instancetype)refresh {
     return [[self alloc] init];
 }
@@ -47,27 +48,24 @@ static CGFloat const kRefreshControlHideDuration = 0.5; // 控件从刷新状态
 - (instancetype)initWithFrame:(CGRect)frame {
     if (self = [super initWithFrame:frame]) {
         _defaultCenterY = - kRefreshWidthAndHeight * 0.5;
-        [self setupUI];
+        
+        //
+        CGRect tempFrame = self.frame;
+        tempFrame.size = CGSizeMake(kRefreshWidthAndHeight, kRefreshWidthAndHeight);
+        self.frame = tempFrame;
+        
+        self.backgroundColor = [UIColor clearColor];
+        
+        // 添加三个layer
+        [self.layer addSublayer:self.bgGrayLayer];
+        [self.layer addSublayer:self.topLayer];
+        [self.layer addSublayer:self.bottomLayer];
+        
+        //
+        [self drawInLayer];
     }
     
     return self;
-}
-
-- (void)setupUI {
-    //
-    CGRect tempFrame = self.frame;
-    tempFrame.size = CGSizeMake(kRefreshWidthAndHeight, kRefreshWidthAndHeight);
-    self.frame = tempFrame;
-    
-    self.backgroundColor = [UIColor clearColor];
-    
-    // 添加三个layer
-    [self.layer addSublayer:self.bgGrayLayer];
-    [self.layer addSublayer:self.topLayer];
-    [self.layer addSublayer:self.bottomLayer];
-    
-    //
-    [self drawInLayer];
 }
 
 - (void)layoutSubviews {
@@ -86,11 +84,10 @@ static CGFloat const kRefreshControlHideDuration = 0.5; // 控件从刷新状态
     }
 }
 
-
 #pragma mark - Observer
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSKeyValueChangeKey,id> *)change context:(void *)context {
     if ([keyPath isEqualToString:@"contentOffset"]) {
-        // TODO: 处理 contentOffsetY 值改变
+        // 处理 contentOffsetY 值改变
         [self contentOffsetYDidChanged];
     }
 }
@@ -122,6 +119,7 @@ static CGFloat const kRefreshControlHideDuration = 0.5; // 控件从刷新状态
             
         }
             break;
+            
         case JCRefreshIngState: {
             // 调整顶部距离
             UIEdgeInsets inset = self.superView.contentInset;
@@ -133,14 +131,14 @@ static CGFloat const kRefreshControlHideDuration = 0.5; // 控件从刷新状态
                     self.superView.contentInset = inset;
                     [self.superView setContentOffset:CGPointMake(0, -inset.top) animated:NO];
                 } completion:^(BOOL finished) {
-                    // TODO: 需要调用外界的刷新方法
+                    // 需要调用外界的刷新方法
                     [self sendActionsForControlEvents:UIControlEventValueChanged];
                 }];
             });
         }
             break;
     }
-} 
+}
 
 #pragma mark - Public
 - (void)beginRefreshing {
@@ -182,12 +180,11 @@ static CGFloat const kRefreshControlHideDuration = 0.5; // 控件从刷新状态
 
 #pragma mark - Private
 - (void)contentOffsetYDidChanged {
-    // 取出偏移的y值
     CGFloat contentOffsetY = self.superView.contentOffset.y;
     
     // 1. 设置 控件的 y 值
     // 通过偏移量与顶部间距计算数当前控件的中心点
-    CGFloat result = (contentOffsetY + self.superView.contentInset.top) / 2;
+    CGFloat result = (contentOffsetY + self.superView.contentInset.top) * 0.5;
     // 判断计算出来的值是否比默认的Y值还要小，如果小，就设置该 y 值
     if (result < _defaultCenterY) {
         self.center = CGPointMake(self.center.x, result);
@@ -230,16 +227,13 @@ static CGFloat const kRefreshControlHideDuration = 0.5; // 控件从刷新状态
     
     CGPoint arcCenter = CGPointMake(kRefreshWidthAndHeight * 0.5, kRefreshWidthAndHeight * 0.5);
     
-    if (self.refreshState == JCRefreshIngState) {
-        // 判断如果正在刷新的话，就不需要再次执行动画
+    if (self.refreshState == JCRefreshIngState) { // 正在刷新
         if (_isRefreshingAnim) {
             return;
         }
         
-        // 调整执行动画属性为true
-        _isRefreshingAnim = YES;
-        // 清空背景灰色的layer
-        self.bgGrayLayer.path = nil;
+        _isRefreshingAnim = YES; // 调整执行动画属性为true
+        self.bgGrayLayer.path = nil; // 清空背景灰色的layer
         
         // 1. 底部半圆到整圆
         UIBezierPath *bottomPath = [UIBezierPath bezierPathWithArcCenter:arcCenter radius:kInnerRadius + kLineWidth * 0.5 startAngle:0 endAngle:M_PI * 2 - 0.1 clockwise:YES];
@@ -250,11 +244,9 @@ static CGFloat const kRefreshControlHideDuration = 0.5; // 控件从刷新状态
         bottomAnim.fromValue = [NSNumber numberWithFloat:0.25];
         bottomAnim.toValue = [NSNumber numberWithFloat:1.0];
         bottomAnim.duration = 0.15;
-        //        bottomLayer.add(bottomAnim, forKey: nil)
         [self.bottomLayer addAnimation:bottomAnim forKey:nil];
         
-        // 2. 竖线变短动画
-        // 顶部Path
+        // 2. 顶部Path, 竖线变短动画
         UIBezierPath *topPath = [UIBezierPath bezierPath];
         topPath.lineCapStyle = kCGLineCapSquare;
         [topPath moveToPoint:CGPointMake(arcCenter.x + kInnerRadius + kLineWidth * 0.5, arcCenter.y)];
@@ -289,21 +281,17 @@ static CGFloat const kRefreshControlHideDuration = 0.5; // 控件从刷新状态
     }
     
     // 绘制默认状态与松手就刷新状态的代码
-    // 绘制灰色背景 layer 内容
-    // 画 1/4 圆
-    UIBezierPath *path = [UIBezierPath bezierPathWithArcCenter:arcCenter radius:kInnerRadius startAngle:startAngle endAngle:endAngle clockwise:NO];
-    // 添加左边竖线
-    [path addLineToPoint:CGPointMake(path.currentPoint.x, arcCenter.y - kLineHeight)];
-    // 添加顶部横线
-    [path addLineToPoint:CGPointMake(path.currentPoint.x + kLineWidth, path.currentPoint.y)];
-    // 添加右边竖线
-    [path addLineToPoint:CGPointMake(path.currentPoint.x, arcCenter.y + kLineHeight)];
-    // 添加外圆
-    [path addArcWithCenter:arcCenter radius:kInnerRadius + kLineWidth startAngle:endAngle endAngle:startAngle - 0.05 clockwise:YES];
+    // 绘制灰色J背景 layer 内容
+    UIBezierPath *path = [UIBezierPath bezierPathWithArcCenter:arcCenter radius:kInnerRadius startAngle:startAngle endAngle:endAngle clockwise:NO]; // 画 1/4 圆
+    [path addLineToPoint:CGPointMake(path.currentPoint.x, arcCenter.y - kLineHeight)]; // 添加左边竖线
+    [path addLineToPoint:CGPointMake(path.currentPoint.x + kLineWidth, path.currentPoint.y)]; // 添加顶部横线
+    [path addLineToPoint:CGPointMake(path.currentPoint.x, arcCenter.y + kLineHeight)]; // 添加右边竖线
+    [path addArcWithCenter:arcCenter radius:kInnerRadius + kLineWidth startAngle:endAngle endAngle:startAngle - 0.05 clockwise:YES]; // 添加外圆
     
     [path closePath];
     
     self.bgGrayLayer.path = path.CGPath;
+    
     
     // 通过比例绘制填充 layer
     // 如果小于0.016.在画半圆的时候会反方向画，所以加个判断
@@ -348,19 +336,26 @@ static CGFloat const kRefreshControlHideDuration = 0.5; // 控件从刷新状态
 
 - (void)dealloc {
     [self.superView removeObserver:self forKeyPath:@"contentOffset"];
-    [self.superView removeObserver:self forKeyPath:@"frame"];
 }
 
 #pragma mark - Lazy
 - (CAShapeLayer *)bgGrayLayer {
     if (!_bgGrayLayer) {
         CAShapeLayer *bgGrayLayer = [[CAShapeLayer alloc] init];
-        struct CGColor *color = JCColor(222.0, 226.0, 229.0).CGColor;
-        bgGrayLayer.fillColor = color;
-        //        bgGrayLayer.strokeColor = color;
+        bgGrayLayer.fillColor = JCColor(222.0, 226.0, 229.0).CGColor;
         _bgGrayLayer = bgGrayLayer;
     }
     return _bgGrayLayer;
+}
+
+- (CAShapeLayer *)topLayer {
+    if (!_topLayer) {
+        CAShapeLayer *topLayer = [[CAShapeLayer alloc] init];
+        topLayer.strokeColor = JC_THEME_COLOE.CGColor;
+        topLayer.lineWidth = kLineWidth;
+        _topLayer = topLayer;
+    }
+    return _topLayer;
 }
 
 - (CAShapeLayer *)bottomLayer {
@@ -373,16 +368,6 @@ static CGFloat const kRefreshControlHideDuration = 0.5; // 控件从刷新状态
         _bottomLayer = bottomLayer;
     }
     return _bottomLayer;
-}
-
-- (CAShapeLayer *)topLayer {
-    if (!_topLayer) {
-        CAShapeLayer *topLayer = [[CAShapeLayer alloc] init];
-        topLayer.strokeColor = JC_THEME_COLOE.CGColor;
-        topLayer.lineWidth = kLineWidth;
-        _topLayer = topLayer;
-    }
-    return _topLayer;
 }
 
 
