@@ -9,9 +9,9 @@
 #import <UIKit/UIKit.h>
 
 typedef NS_ENUM(NSUInteger, JCRefreshState) {
-    JCRefreshNormalState,
-    JCRefreshPullingState,
-    JCRefreshIngState,
+    JCRefreshNormalState, // 未刷新
+    JCRefreshPullingState, // 即将刷新
+    JCRefreshIngState, // 刷新中
 };
 
 @interface JCRefresh : UIControl
